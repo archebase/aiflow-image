@@ -4,11 +4,11 @@
     {
       "id": 1,
       "prompt": "为智域基石公众号做 3 套机器人触觉主题首图，输出横版和方图，保持主体一致，最后放官方 Logo 和标题。",
-      "expected_output": "The agent loads aiflow-basic and archebase-vi-guide, separates generation from deterministic Logo/text composition, records candidates and delivers variants with release QA.",
+      "expected_output": "The agent uses AIFlow GPT Image for generated masters, separates Logo/text composition, records candidates and delivers variants with VI release QA.",
       "files": [],
       "expectations": [
         "Does not ask the model to generate the official Logo or final text.",
-        "Uses a bounded candidate and iteration workflow.",
+        "Uses separate n=1 requests for a bounded candidate set.",
         "Creates deterministic crop variants and records provenance.",
         "Runs ArcheBase brand release gates."
       ]
@@ -16,12 +16,35 @@
     {
       "id": 2,
       "prompt": "用 AIFlow 做一组保持同一机器人角色和工业场景风格的四张活动海报底图，并说明每轮修改依据。",
-      "expected_output": "The agent creates a consistency dossier, uses controlled prompt iterations, compares candidates and records the selected master and hypotheses.",
+      "expected_output": "The agent creates a consistency dossier, notes current reference-image limitations, uses controlled prompt iterations and records selected outputs and hypotheses.",
       "files": [],
       "expectations": [
         "Defines subject/style invariants before generation.",
         "Changes named variables rather than vague make-it-better iterations.",
-        "Reports consistency limitations if reference-image support is unavailable."
+        "Reports that current AIFlow generations do not guarantee reference-image consistency."
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "Generate a campaign master through AIFlow and save the exact image into this project. If the delivery UI does not display the completed result, recover the exact completed artifact without generating again.",
+      "expected_output": "The agent uses the AIFlow gpt-image-2 adapter, applies the absorbed imagegen prompt workflow, decodes and validates the exact Base64 artifact, and treats missing display as a delivery issue rather than a reason to regenerate.",
+      "files": [],
+      "expectations": [
+        "Uses AIFlow gpt-image-2 as the current verified production adapter.",
+        "Does not silently switch to another provider or model.",
+        "Does not regenerate when a completed result exists but UI delivery failed.",
+        "Saves the exact bitmap to a workspace path and records provenance."
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Add support for a future non-GPT text-to-image model without claiming features that have not been tested.",
+      "expected_output": "The agent creates an unsupported model-adapter record, leaves implementation empty, and requires live positive evidence and fail-closed negative controls before verification.",
+      "files": [],
+      "expectations": [
+        "Does not infer compatibility from an OpenAI-like API shape.",
+        "Records capability booleans, limits, output transport and retry/billing behavior.",
+        "Keeps the provider unsupported until verified evidence exists."
       ]
     }
   ]

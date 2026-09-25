@@ -10,8 +10,8 @@
 - References and rights:
 - Must include:
 - Must exclude:
-- Text / Logo overlay plan:
-- Backend requirement:
+- Backend requirement: AIFlow | Codex built-in | user-approved alternate
+- Codex delivery recovery required: yes | no
 - Budget / retry boundary:
 - Approval owner:
 - Release deadline:

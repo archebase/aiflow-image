@@ -1,8 +1,9 @@
 # Generation record
 
-- Backend:
-- Canonical model:
-- Model discovery evidence:
+- Backend: AIFlow | Codex built-in | alternate
+- Canonical model / Codex selected model:
+- Model discovery or backend evidence:
+- Codex image-generation marker / recovered source record:
 - Prompt:
 - Reference files / hashes:
 - Size / quality / format:
