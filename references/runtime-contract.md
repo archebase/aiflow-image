@@ -15,17 +15,16 @@ python3 scripts/aiflow_image.py generate --request request.json
 
 Both commands emit JSON to stdout and use a non-zero exit code on failure. Generation performs no automatic retry.
 
-## Launcher discovery
+## Service configuration
 
-The CLI uses `AIFLOW_TOOL` to prefer the matching launcher environment, then checks safe fallbacks:
+The runtime reads exactly two variables from the AIFlow service environment:
 
-- Pi or generic: `AIFLOW_BASE_URL` + `AIFLOW_API_KEY`;
-- Codex: `OPENAI_BASE_URL` + `OPENAI_API_KEY` for an AIFlow `/llm/v1` URL;
-- Claude Code: `ANTHROPIC_BASE_URL` + `ANTHROPIC_API_KEY` for an AIFlow `/llm` URL.
+- `AIFLOW_BASE_URL`;
+- `AIFLOW_API_KEY`.
 
-When `AIFLOW_TOOL` names Codex, Claude or Pi, the CLI reads only that launcher's matching pair and fails if it is missing. This prevents stale inherited variables for another harness from overriding or substituting for the active invocation. A generic harness with no `AIFLOW_TOOL` accepts only `AIFLOW_BASE_URL` and `AIFLOW_API_KEY`; it never consumes provider-named credentials implicitly.
+Both must be present together. The runtime never reads provider-named variables such as `OPENAI_*` or `ANTHROPIC_*`, and never treats them as AIFlow credentials. AIFlow's own machine-readable service documentation (for example its `llms.txt`) is the source of truth for how a deployment is configured; do not infer configuration from retired local-tool launchers.
 
-Accepted base forms are an AIFlow origin for `AIFLOW_BASE_URL`, or `/llm`/`/llm/v1` for provider variables injected by an identified AIFlow Codex/Claude launcher. A non-local HTTP URL, a provider `/v1` URL or a URL containing credentials/query/fragment is rejected, and HTTP redirects are never followed. The CLI has no endpoint or credential override arguments; prompts cannot redirect launcher credentials. The launcher/operator remains responsible for supplying the trusted AIFlow hostname.
+`AIFLOW_BASE_URL` accepts the AIFlow origin, `/llm`, or `/llm/v1`. A non-local HTTP URL, a provider `/v1` URL or a URL containing credentials/query/fragment is rejected, and HTTP redirects are never followed. The CLI has no endpoint or credential override arguments; prompts cannot redirect the configured credential. The operator remains responsible for supplying the trusted AIFlow hostname.
 
 ## Model discovery and selection
 

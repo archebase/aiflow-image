@@ -1,14 +1,14 @@
 ---
-name: aiflow-image-production
-description: Generate and produce raster images through the configured AIFlow gateway. Use for every AIFlow image request, including one-shot generation, candidate sets, controlled iteration, consistent visual families, campaign masters, deterministic crops, artifact recovery, brand-sensitive graphics and release QA. This skill is self-contained and works across AIFlow-configured Claude Code, Codex, Pi and other Python-capable harnesses; do not require aiflow-basic or call a provider directly.
+name: aiflow-image
+description: Generate and produce raster images through the configured AIFlow gateway. Use for every AIFlow image request, including one-shot generation, candidate sets, controlled iteration, consistent visual families, campaign masters, deterministic crops, artifact recovery, brand-sensitive graphics and release QA. This skill is self-contained and works in any Python-capable harness that has the AIFlow service configured; do not call a model provider directly.
 license: Proprietary. For ArcheBase organization use only.
 metadata:
-  version: "2.0.0"
+  version: "2.1.0"
   runtime_contract: "aiflow.image-request.v1"
-compatibility: "Requires Python 3.10+, Pillow 12.0.0, and an AIFlow-configured harness environment. ArcheBase-branded work also requires archebase-vi-guide."
+compatibility: "Requires Python 3.10+, Pillow 12.0.0, and AIFLOW_BASE_URL/AIFLOW_API_KEY from the configured AIFlow service. ArcheBase-branded work also requires archebase-vi-guide."
 ---
 
-# AIFlow Image Production
+# AIFlow Image
 
 Use one self-contained AIFlow workflow for both simple generation and production work. Model discovery, authorization, routing, budget and canonical model facts remain owned by AIFlow; this skill compiles the request, invokes the gateway, verifies the artifact and manages review and delivery.
 
@@ -42,7 +42,7 @@ Use one self-contained AIFlow workflow for both simple generation and production
 ## Runtime rules
 
 - Use only the configured AIFlow gateway. Do not call OpenAI or another provider directly and do not use a harness-native image generator as a silent fallback.
-- The runtime uses `AIFLOW_*` for generic/Pi launches and accepts `OPENAI_*` or `ANTHROPIC_*` only when `AIFLOW_TOOL` identifies an AIFlow Codex or Claude launch. It refuses provider `/v1` paths and never follows redirects; the launcher/operator owns the trusted AIFlow hostname.
+- The runtime reads only `AIFLOW_BASE_URL` and `AIFLOW_API_KEY`; it never consumes `OPENAI_*` or `ANTHROPIC_*` as AIFlow credentials. It refuses provider `/v1` paths and never follows redirects; the operator owns the trusted AIFlow hostname.
 - The live `/llm/v1/models` response is the model source of truth. If several image-capable models are visible, select one explicitly or configure `AIFLOW_IMAGE_MODEL`.
 - Never put credentials in command arguments, files, prompts, logs or chat.
 - Never retry automatically. Retry only after the returned structured error explicitly reports `retry_safe: true` and the user or workflow approves the additional cost.

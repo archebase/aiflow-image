@@ -2,12 +2,12 @@
 
 ## Product boundary
 
-There is one installable image skill and one executable contract. `aiflow-basic` is not a runtime dependency. Claude Code, Codex, Pi, Hermes and other Python-capable harnesses invoke `scripts/aiflow_image.py`; AIFlow remains the only production gateway.
+There is one installable image skill and one executable contract. `aiflow-basic` is not a runtime dependency. Any Python-capable harness invokes `scripts/aiflow_image.py`; AIFlow remains the only production gateway and the source of model truth.
 
 ## Layers
 
 1. **Skill orchestration** — brief, prompt method, bounded candidate rounds, review, iteration and release.
-2. **Harness-neutral CLI** — versioned JSON request/result contract and launcher-environment resolution.
+2. **Harness-neutral CLI** — versioned JSON request/result contract and AIFlow service configuration.
 3. **AIFlow adapter** — `/llm/v1/models` capability discovery and `/llm/v1/images/generations` execution.
 4. **Artifact boundary** — Base64/container validation, full bitmap decode, no-overwrite sidecar-first commit and an image completion marker.
 5. **Deterministic production** — crop, inspection, future composition and release gates.
@@ -22,7 +22,7 @@ Model policy, identity, authorization, attribution, budget, route choice and pro
 - PNG, JPEG and WebP artifact verification;
 - requested and actual metadata separation;
 - structured safe errors with no automatic retry;
-- cross-harness launcher discovery for AIFlow-configured environments.
+- provider-neutral AIFlow service configuration through `AIFLOW_BASE_URL`/`AIFLOW_API_KEY`.
 
 The runtime does not currently implement Images edits, reference-image upload, streaming partial images or URL-result download. The skill must report those operations as unsupported rather than simulate them.
 

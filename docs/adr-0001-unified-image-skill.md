@@ -8,7 +8,7 @@
 The current implementation is split across two repositories:
 
 - `aiflow-basic` performs live model discovery and one non-streaming Images request.
-- `aiflow-image-production` contains production methodology, review guidance, crop utilities and release templates, but delegates all generation to `aiflow-basic`.
+- `aiflow-image` contains production methodology, review guidance, crop utilities and release templates, but delegates all generation to `aiflow-basic`.
 
 That split follows implementation primitives rather than user intent. A user installs an image-generation skill to produce image artifacts; model discovery and gateway transport are internal steps. Requiring a second skill creates an incomplete installation state and prevents the production skill from offering one stable executable contract to different agent harnesses.
 
@@ -20,7 +20,7 @@ The current repositories also disagree about gateway paths, credential names and
 
 ## Decision
 
-`aiflow-image-production` becomes the only installable image skill.
+`aiflow-image` becomes the only installable image skill.
 
 It owns:
 
@@ -39,7 +39,7 @@ AIFlow remains the sole production gateway. The skill does not call providers di
 
 ## Configuration boundary
 
-The harness or AIFlow launcher supplies configuration:
+The AIFlow service environment supplies configuration:
 
 - `AIFLOW_BASE_URL`: either the AIFlow origin or a URL ending in `/llm/v1`;
 - `AIFLOW_API_KEY`: the active AIFlow or invocation credential;
@@ -89,20 +89,20 @@ Raw response bodies, Base64 payloads and credentials are never included. The exe
 ### Positive
 
 - One skill installation is complete and usable.
-- Claude Code, Codex, Pi, Hermes and future harnesses share one executable contract.
+- Any Python-capable harness shares one executable contract without harness-specific adapters.
 - Model and policy facts stay in AIFlow instead of drifting into skill documentation.
 - Artifact and billing safety become testable code rather than prose-only rules.
 - Future AIFlow image models can be added without creating another user-facing skill.
 
 ### Negative
 
-- `aiflow-image-production` gains a larger execution surface and must maintain tests.
+- `aiflow-image` gains a larger execution surface and must maintain tests.
 - Pillow remains required for artifact verification and deterministic variants.
 - More than one visible image model requires an explicit request or configured preference.
 
 ## Migration
 
-1. Implement and verify the self-contained runtime in `aiflow-image-production`.
+1. Implement and verify the self-contained runtime in `aiflow-image`.
 2. Remove all runtime dependencies and routing references to `aiflow-basic`.
 3. Mark `aiflow-basic` deprecated and point users to the unified skill.
 4. Retain the old repository temporarily for history and migration, then archive it after consumers have moved.

@@ -374,52 +374,27 @@ def validate_request(value: Any, output_override: Path | None) -> tuple[dict[str
 
 
 def resolve_connection() -> tuple[str, str]:
-    """Resolve the AIFlow launcher environment without prompt-controlled endpoints."""
-    by_kind = {
-        "aiflow": (os.environ.get("AIFLOW_BASE_URL", ""), "AIFLOW_API_KEY", False),
-        "codex": (os.environ.get("OPENAI_BASE_URL", ""), "OPENAI_API_KEY", True),
-        "claude": (os.environ.get("ANTHROPIC_BASE_URL", ""), "ANTHROPIC_API_KEY", True),
-    }
-    tool = os.environ.get("AIFLOW_TOOL", "").strip().lower()
-    order = {
-        "codex": ("codex",),
-        "claude": ("claude",),
-        "pi": ("aiflow",),
-    }.get(tool, ("aiflow",))
-    candidates = [by_kind[kind] for kind in order]
-    rejected: list[str] = []
-    missing_keys: list[str] = []
-    for raw_url, default_key_env, require_llm_path in candidates:
-        if not raw_url:
-            continue
-        try:
-            gateway = normalize_gateway_base(raw_url)
-            raw_path = urllib.parse.urlsplit(raw_url).path.rstrip("/")
-            if require_llm_path and raw_path not in {"/llm", "/llm/v1"}:
-                raise ImageSkillError("configuration_error", "Harness provider URL is not an AIFlow /llm gateway")
-        except ImageSkillError:
-            rejected.append(default_key_env)
-            continue
-        key_env = default_key_env
-        api_key = os.environ.get(key_env, "")
-        if not api_key:
-            missing_keys.append(key_env)
-            continue
-        return gateway, api_key
-    if missing_keys:
+    """Resolve the configured AIFlow service endpoint and credential."""
+    raw_url = os.environ.get("AIFLOW_BASE_URL", "")
+    api_key = os.environ.get("AIFLOW_API_KEY", "")
+    if raw_url and not api_key:
         raise ImageSkillError(
             "configuration_error",
-            "An AIFlow gateway was discovered but its matching launcher credential is missing",
-            details={"required_environment": sorted(set(missing_keys))},
+            "AIFLOW_BASE_URL is set but AIFLOW_API_KEY is missing",
+            details={"required_environment": ["AIFLOW_API_KEY"]},
         )
-    if rejected:
+    if api_key and not raw_url:
         raise ImageSkillError(
             "configuration_error",
-            "Configured model-provider URLs are not AIFlow /llm gateway URLs; refusing to forward their credentials",
+            "AIFLOW_API_KEY is set but AIFLOW_BASE_URL is missing",
+            details={"required_environment": ["AIFLOW_BASE_URL"]},
         )
+    if raw_url and api_key:
+        return normalize_gateway_base(raw_url), api_key
     raise ImageSkillError(
         "configuration_error",
-        "No AIFlow launcher environment was found; configure AIFLOW_BASE_URL/AIFLOW_API_KEY",
+        "AIFlow is not configured; set AIFLOW_BASE_URL and AIFLOW_API_KEY from the AIFlow service documentation",
+        details={"required_environment": ["AIFLOW_BASE_URL", "AIFLOW_API_KEY"]},
     )
 
 

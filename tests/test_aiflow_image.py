@@ -24,15 +24,20 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import aiflow_image as runtime  # noqa: E402
 
 
-LAUNCHER_KEYS = (
-    "AIFLOW_TOOL",
+AIFLOW_KEYS = (
     "AIFLOW_BASE_URL",
     "AIFLOW_API_KEY",
+)
+
+UNRELATED_PROVIDER_KEYS = (
+    "AIFLOW_TOOL",
     "OPENAI_BASE_URL",
     "OPENAI_API_KEY",
     "ANTHROPIC_BASE_URL",
     "ANTHROPIC_API_KEY",
 )
+
+LAUNCHER_KEYS = AIFLOW_KEYS + UNRELATED_PROVIDER_KEYS
 
 
 def png_bytes(width: int = 16, height: int = 16) -> bytes:
@@ -71,21 +76,14 @@ def image_payload(*, width: int = 16, height: int = 16, declared_size: str | Non
 
 
 @contextlib.contextmanager
-def launcher_environment(tool: str, base_url: str, api_key: str):
+def aiflow_service_environment(base_url: str, api_key: str):
+    """Set only the AIFlow service configuration the skill supports."""
     original = dict(os.environ)
     try:
         for key in LAUNCHER_KEYS:
             os.environ.pop(key, None)
-        os.environ["AIFLOW_TOOL"] = tool
-        if tool == "codex":
-            os.environ["OPENAI_BASE_URL"] = base_url.rstrip("/") + "/llm/v1"
-            os.environ["OPENAI_API_KEY"] = api_key
-        elif tool == "claude":
-            os.environ["ANTHROPIC_BASE_URL"] = base_url.rstrip("/") + "/llm"
-            os.environ["ANTHROPIC_API_KEY"] = api_key
-        else:
-            os.environ["AIFLOW_BASE_URL"] = base_url
-            os.environ["AIFLOW_API_KEY"] = api_key
+        os.environ["AIFLOW_BASE_URL"] = base_url.rstrip("/") + "/llm/v1"
+        os.environ["AIFLOW_API_KEY"] = api_key
         yield
     finally:
         os.environ.clear()
@@ -251,7 +249,7 @@ class RuntimeTests(unittest.TestCase):
         self.assertEqual(runtime.select_image_model(models, "image-b", None), "image-b")
 
     def test_models_command_uses_live_gateway_contract(self) -> None:
-        with GatewayServer() as gateway, launcher_environment("pi", gateway.base_url, "secret-key-marker"):
+        with GatewayServer() as gateway, aiflow_service_environment(gateway.base_url, "secret-key-marker"):
             result = runtime.list_models(runtime.build_parser().parse_args(["models"]))
         self.assertTrue(result["ok"])
         self.assertEqual(result["models"], [{"id": "gpt-image-test", "supports_image_generation": True}])
@@ -263,7 +261,7 @@ class RuntimeTests(unittest.TestCase):
             root = Path(temporary)
             output = root / "result.png"
             request_path = self.generate_request(root, output)
-            with launcher_environment("pi", gateway.base_url, "secret-key-marker"):
+            with aiflow_service_environment(gateway.base_url, "secret-key-marker"):
                 args = runtime.build_parser().parse_args(["generate", "--request", str(request_path)])
                 result = runtime.generate(args)
             self.assertTrue(result["ok"])
@@ -283,7 +281,7 @@ class RuntimeTests(unittest.TestCase):
         with GatewayServer(response_payload=response) as gateway, tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             request_path = self.generate_request(root, root / "result.png", quality="high", output_format="png")
-            with launcher_environment("pi", gateway.base_url, "key"):
+            with aiflow_service_environment(gateway.base_url, "key"):
                 result = runtime.generate(runtime.build_parser().parse_args(["generate", "--request", str(request_path)]))
             self.assertEqual(result["warnings"], [])
 
@@ -291,7 +289,7 @@ class RuntimeTests(unittest.TestCase):
         with GatewayServer() as gateway, tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             request_path = self.generate_request(root, root / "result.jpg", output_format="png")
-            with launcher_environment("pi", gateway.base_url, "key"):
+            with aiflow_service_environment(gateway.base_url, "key"):
                 with self.assertRaises(runtime.ImageSkillError) as caught:
                     runtime.generate(runtime.build_parser().parse_args(["generate", "--request", str(request_path)]))
             self.assertEqual(caught.exception.category, "input_error")
@@ -304,7 +302,7 @@ class RuntimeTests(unittest.TestCase):
             output = root / "result.png"
             output.write_bytes(b"existing")
             request_path = self.generate_request(root, output)
-            with launcher_environment("pi", gateway.base_url, "key"):
+            with aiflow_service_environment(gateway.base_url, "key"):
                 with self.assertRaises(runtime.ImageSkillError) as caught:
                     runtime.generate(runtime.build_parser().parse_args(["generate", "--request", str(request_path)]))
             self.assertEqual(caught.exception.category, "artifact_exists")
@@ -318,7 +316,7 @@ class RuntimeTests(unittest.TestCase):
             output = root / "link.png"
             output.symlink_to(target)
             request_path = self.generate_request(root, output)
-            with launcher_environment("pi", gateway.base_url, "key"):
+            with aiflow_service_environment(gateway.base_url, "key"):
                 with self.assertRaises(runtime.ImageSkillError) as caught:
                     runtime.generate(runtime.build_parser().parse_args(["generate", "--request", str(request_path)]))
             self.assertEqual(caught.exception.category, "artifact_error")
@@ -374,61 +372,45 @@ class RuntimeTests(unittest.TestCase):
             root = Path(temporary)
             output = root / "result.png"
             request_path = self.generate_request(root, output)
-            with launcher_environment("pi", gateway.base_url, "key"):
+            with aiflow_service_environment(gateway.base_url, "key"):
                 with self.assertRaises(runtime.ImageSkillError) as caught:
                     runtime.generate(runtime.build_parser().parse_args(["generate", "--request", str(request_path)]))
             self.assertEqual(caught.exception.category, "invalid_gateway_response")
             self.assertFalse(output.exists())
 
-    def test_codex_and_claude_launcher_contexts_are_strict(self) -> None:
+    def test_only_aiflow_service_variables_configure_the_runtime(self) -> None:
         original = dict(os.environ)
         try:
             for key in LAUNCHER_KEYS:
                 os.environ.pop(key, None)
-            os.environ["AIFLOW_BASE_URL"] = "https://stale.example/llm/v1"
-            os.environ["AIFLOW_API_KEY"] = "stale-key"
-            os.environ["AIFLOW_TOOL"] = "codex"
-            os.environ["OPENAI_BASE_URL"] = "https://gateway.example/llm/v1"
-            os.environ["OPENAI_API_KEY"] = "codex-key"
-            self.assertEqual(runtime.resolve_connection(), ("https://gateway.example/llm/v1", "codex-key"))
-            os.environ.pop("OPENAI_API_KEY")
+            os.environ["AIFLOW_BASE_URL"] = "https://aiflow.example/llm/v1"
+            os.environ["AIFLOW_API_KEY"] = "service-key"
+            self.assertEqual(runtime.resolve_connection(), ("https://aiflow.example/llm/v1", "service-key"))
+            os.environ.pop("AIFLOW_API_KEY")
             with self.assertRaises(runtime.ImageSkillError) as caught:
                 runtime.resolve_connection()
-            self.assertEqual(caught.exception.details["required_environment"], ["OPENAI_API_KEY"])
-            os.environ.pop("OPENAI_BASE_URL")
-            os.environ["AIFLOW_TOOL"] = "claude"
+            self.assertEqual(caught.exception.details["required_environment"], ["AIFLOW_API_KEY"])
+        finally:
+            os.environ.clear()
+            os.environ.update(original)
+
+    def test_unrelated_provider_variables_are_ignored(self) -> None:
+        original = dict(os.environ)
+        try:
+            for key in LAUNCHER_KEYS:
+                os.environ.pop(key, None)
+            os.environ["AIFLOW_TOOL"] = "codex"
+            os.environ["OPENAI_BASE_URL"] = "https://gateway.example/llm/v1"
+            os.environ["OPENAI_API_KEY"] = "must-not-be-consumed"
             os.environ["ANTHROPIC_BASE_URL"] = "https://gateway.example/llm"
-            os.environ["ANTHROPIC_API_KEY"] = "claude-key"
-            self.assertEqual(runtime.resolve_connection(), ("https://gateway.example/llm/v1", "claude-key"))
-        finally:
-            os.environ.clear()
-            os.environ.update(original)
-
-    def test_generic_harness_does_not_consume_provider_named_credentials(self) -> None:
-        original = dict(os.environ)
-        try:
-            for key in LAUNCHER_KEYS:
-                os.environ.pop(key, None)
-            os.environ["OPENAI_BASE_URL"] = "https://evil.example/llm/v1"
-            os.environ["OPENAI_API_KEY"] = "must-not-forward"
+            os.environ["ANTHROPIC_API_KEY"] = "must-not-be-consumed"
             with self.assertRaises(runtime.ImageSkillError) as caught:
                 runtime.resolve_connection()
             self.assertEqual(caught.exception.category, "configuration_error")
-        finally:
-            os.environ.clear()
-            os.environ.update(original)
-
-    def test_provider_direct_launcher_url_is_rejected(self) -> None:
-        original = dict(os.environ)
-        try:
-            for key in LAUNCHER_KEYS:
-                os.environ.pop(key, None)
-            os.environ["AIFLOW_TOOL"] = "codex"
-            os.environ["OPENAI_BASE_URL"] = "https://api.openai.example/v1"
-            os.environ["OPENAI_API_KEY"] = "must-not-forward"
-            with self.assertRaises(runtime.ImageSkillError) as caught:
-                runtime.resolve_connection()
-            self.assertEqual(caught.exception.category, "configuration_error")
+            self.assertEqual(
+                caught.exception.details["required_environment"],
+                ["AIFLOW_BASE_URL", "AIFLOW_API_KEY"],
+            )
         finally:
             os.environ.clear()
             os.environ.update(original)

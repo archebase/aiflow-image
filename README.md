@@ -1,4 +1,4 @@
-# AIFlow Image Production Skill
+# AIFlow Image Skill
 
 One self-contained image-generation and production skill for every AIFlow-configured harness. It replaces the former `aiflow-basic` dependency and supports both one-shot generation and multi-round production workflows.
 
@@ -6,17 +6,20 @@ One self-contained image-generation and production skill for every AIFlow-config
 
 - Python 3.10 or newer
 - Pillow
-- an AIFlow launcher context or equivalent AIFlow gateway environment
+- AIFlow service configuration: `AIFLOW_BASE_URL` and `AIFLOW_API_KEY`
 
 ```sh
 python3 -m pip install -r requirements.txt
 ```
 
-AIFlow launchers may expose one of these equivalent environments:
+The runtime reads exactly two AIFlow service variables:
 
-- Pi or a generic launcher: `AIFLOW_BASE_URL`, `AIFLOW_API_KEY`
-- Codex: `OPENAI_BASE_URL`, `OPENAI_API_KEY`, pointing to AIFlow `/llm/v1`
-- Claude Code: `ANTHROPIC_BASE_URL`, `ANTHROPIC_API_KEY`, pointing to AIFlow `/llm`
+```text
+AIFLOW_BASE_URL
+AIFLOW_API_KEY
+```
+
+It never consumes provider-named variables such as `OPENAI_*` or `ANTHROPIC_*`. Follow the AIFlow service documentation (for example its `llms.txt`) for the deployment values.
 
 The runtime accepts only an AIFlow origin or `/llm[/v1]` URL and refuses provider-direct URLs.
 
