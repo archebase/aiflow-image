@@ -23,11 +23,15 @@ def main() -> int:
     args = parser.parse_args()
     args.output_dir.mkdir(parents=True, exist_ok=True)
     with Image.open(args.input) as source:
-        image = source.convert("RGB")
+        image = source.convert("RGBA" if "A" in source.getbands() else "RGB")
+        seen_names: set[str] = set()
         for raw in args.variant:
             name, separator, size_raw = raw.partition("=")
-            if not separator or not name:
-                parser.error("variant must be NAME=WIDTHxHEIGHT")
+            if not separator or not name or Path(name).name != name or name in {".", ".."}:
+                parser.error("variant must be a safe NAME=WIDTHxHEIGHT")
+            if name in seen_names:
+                parser.error(f"duplicate variant name: {name}")
+            seen_names.add(name)
             width, height = parse_size(size_raw)
             target_ratio = width / height
             source_ratio = image.width / image.height
@@ -41,6 +45,8 @@ def main() -> int:
                 box = (0, top, image.width, top + crop_height)
             output = image.crop(box).resize((width, height), Image.Resampling.LANCZOS)
             path = args.output_dir / f"{name}.png"
+            if path.exists() or path.is_symlink():
+                parser.error(f"refusing to overwrite variant: {path}")
             output.save(path, format="PNG", optimize=True)
             print(path.resolve())
     return 0

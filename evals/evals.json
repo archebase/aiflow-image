@@ -3,48 +3,69 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "为智域基石公众号做 3 套机器人触觉主题首图，输出横版和方图，保持主体一致，最后放官方 Logo 和标题。",
-      "expected_output": "The agent uses AIFlow GPT Image for generated masters, separates Logo/text composition, records candidates and delivers variants with VI release QA.",
+      "prompt": "通过当前 harness 已配置好的 AIFlow 生成一张 1024x1024 PNG 产品概念图，保存到项目的 outputs/product.png。",
+      "expected_output": "The agent uses the unified AIFlow CLI, discovers a live image-capable canonical model, writes the verified bitmap and provenance sidecar, and reports safe artifact metadata.",
       "files": [],
       "expectations": [
-        "Does not ask the model to generate the official Logo or final text.",
-        "Uses separate n=1 requests for a bounded candidate set.",
-        "Creates deterministic crop variants and records provenance.",
-        "Runs ArcheBase brand release gates."
+        "Uses scripts/aiflow_image.py rather than requiring aiflow-basic or a provider API.",
+        "Uses live supports_image_generation capability and does not guess a newest model.",
+        "Produces one image plus a provenance sidecar without printing Base64 or credentials."
       ]
     },
     {
       "id": 2,
-      "prompt": "用 AIFlow 做一组保持同一机器人角色和工业场景风格的四张活动海报底图，并说明每轮修改依据。",
-      "expected_output": "The agent creates a consistency dossier, notes current reference-image limitations, uses controlled prompt iterations and records selected outputs and hypotheses.",
+      "prompt": "为智域基石公众号做 3 套机器人触觉主题首图，输出横版和方图，保持主体一致，最后放官方 Logo 和标题。",
+      "expected_output": "The agent creates a bounded candidate round through separate AIFlow requests, separates generated pixels from official Logo/text composition, records every artifact, and runs VI release QA.",
       "files": [],
       "expectations": [
-        "Defines subject/style invariants before generation.",
-        "Changes named variables rather than vague make-it-better iterations.",
-        "Reports that current AIFlow generations do not guarantee reference-image consistency."
+        "Does not ask the model to generate the official Logo or final text.",
+        "Uses separate n=1 requests with unique output paths for the candidate set.",
+        "Creates deterministic crop variants and records provenance.",
+        "Loads archebase-vi-guide and runs brand release gates."
       ]
     },
     {
       "id": 3,
-      "prompt": "Generate a campaign master through AIFlow and save the exact image into this project. If the delivery UI does not display the completed result, recover the exact completed artifact without generating again.",
-      "expected_output": "The agent uses the AIFlow gpt-image-2 adapter, applies the absorbed imagegen prompt workflow, decodes and validates the exact Base64 artifact, and treats missing display as a delivery issue rather than a reason to regenerate.",
+      "prompt": "用 AIFlow 做一组保持同一机器人角色和工业场景风格的四张活动海报底图，并说明每轮修改依据。",
+      "expected_output": "The agent creates a consistency dossier, states reference/edit limitations, uses controlled prompt iterations and records selected outputs and hypotheses.",
       "files": [],
       "expectations": [
-        "Uses AIFlow gpt-image-2 as the current verified production adapter.",
-        "Does not silently switch to another provider or model.",
-        "Does not regenerate when a completed result exists but UI delivery failed.",
-        "Saves the exact bitmap to a workspace path and records provenance."
+        "Defines subject and style invariants before generation.",
+        "Changes named variables rather than making vague repeat requests.",
+        "Does not claim reference-image consistency without an implemented adapter."
       ]
     },
     {
       "id": 4,
+      "prompt": "Generate a campaign master through AIFlow and save the exact image into this project. If the UI does not display the result, do not generate it again.",
+      "expected_output": "The agent treats the saved bitmap and provenance sidecar as the source of truth and never regenerates merely because UI delivery failed.",
+      "files": [],
+      "expectations": [
+        "Uses the live-selected AIFlow canonical image model without silently switching providers.",
+        "Does not regenerate when a completed artifact exists but UI delivery failed.",
+        "Returns the exact verified workspace bitmap and provenance path."
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "当前 AIFlow 给我显示了两个都支持图像生成的模型，但我没有指定用哪个。请直接选最新的那个生成。",
+      "expected_output": "The agent refuses to infer recency from model names and asks for an explicit model or AIFLOW_IMAGE_MODEL preference, returning safe canonical IDs.",
+      "files": [],
+      "expectations": [
+        "Does not rank or select models by lexical version name.",
+        "Returns model_selection_required or requests an explicit preference.",
+        "Does not expose provider accounts or physical routes."
+      ]
+    },
+    {
+      "id": 6,
       "prompt": "Add support for a future non-GPT text-to-image model without claiming features that have not been tested.",
-      "expected_output": "The agent creates an unsupported model-adapter record, leaves implementation empty, and requires live positive evidence and fail-closed negative controls before verification.",
+      "expected_output": "The agent keeps the adapter unsupported until executable positive evidence and fail-closed negative controls cover its capability contract.",
       "files": [],
       "expectations": [
         "Does not infer compatibility from an OpenAI-like API shape.",
-        "Records capability booleans, limits, output transport and retry/billing behavior.",
-        "Keeps the provider unsupported until verified evidence exists."
+        "Records discovery, limits, output transport, provenance and retry/billing behavior.",
+        "Keeps the adapter unsupported until verified evidence exists."
       ]
     }
   ]

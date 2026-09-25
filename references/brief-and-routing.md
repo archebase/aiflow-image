@@ -1,12 +1,13 @@
 # Brief and routing
 
-Capture: one-sentence claim, audience, channel, dimensions, crop family, evidence available, subject, must-have elements, prohibited elements, reference images, rights, privacy, budget and approval owner.
+Capture only the detail needed for the work: takeaway, audience, channel, required dimensions/crops, subject, evidence, must-have and prohibited elements, references/rights, budget boundary and approval owner.
 
 ## Routing
 
-- Simple one-prompt/one-image work: `aiflow-basic`.
-- Multi-round, candidate selection, consistency, variants or compositing: this skill.
-- ArcheBase brand work: also load `archebase-vi-guide`.
-- Explicit non-AIFlow request: use the requested backend. Never silently route organizational work outside AIFlow.
+- Every AIFlow raster-generation request uses this skill, including a single image.
+- Simple one-shot work may proceed from the user's prompt plus an output path; do not impose the full production template unnecessarily.
+- Candidate rounds, visual consistency, campaigns, variants and compositing use the complete workflow and records.
+- ArcheBase brand work also loads `archebase-vi-guide`.
+- An explicit non-AIFlow request belongs to the requested backend's own skill; never silently route organizational work outside AIFlow.
 
 Prefer real evidence images over generated claims. Generated imagery is suitable for atmosphere, abstraction and concept art, not for pretending a specific deployment or customer fact exists.

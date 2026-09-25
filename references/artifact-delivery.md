@@ -1,42 +1,26 @@
 # Image artifact delivery and recovery
 
-The generation is incomplete until the exact model output exists as a verified workspace file.
+Generation is incomplete until the exact model result exists as a verified workspace file.
 
-## Standard AIFlow path
+## Implemented AIFlow path
 
-1. Before the request, choose an output directory and stable descriptive name.
-2. Submit one AIFlow Images request.
-3. Decode the exact `data[0].b64_json` result; never copy Base64 into chat or logs.
-4. Validate PNG/JPEG/WebP signature before atomic write.
-5. Avoid overwrite unless explicitly requested; create a versioned sibling name otherwise.
-6. Record path, bytes, format, SHA-256, prompt, canonical model and request metadata.
-7. Display or return the absolute path only after the file exists and validation passes.
+`scripts/aiflow_image.py generate` performs this sequence:
+
+1. choose a stable output path before the request;
+2. discover and select a live image-capable canonical model;
+3. submit one `n=1` AIFlow Images request;
+4. decode `data[0].b64_json` without logging it;
+5. enforce output-size limits and verify the complete bitmap with Pillow;
+6. compare returned format and dimensions with the decoded image;
+7. commit the provenance sidecar first and create the image path last as the completion marker;
+8. return absolute paths, actual metadata and SHA-256 only after both files exist. An orphan sidecar without an image is incomplete and may be removed; an image is never exposed without its sidecar during normal error handling.
+
+Existing files are always refused. Use a new versioned output path for every generation so a partial two-file replacement cannot corrupt provenance.
 
 ## Missing UI or attachment
 
-The AIFlow script writes the artifact directly, so UI attachments are not the source of truth. If a wrapper or future backend reports completion but the UI does not display it:
+The workspace file and provenance sidecar are the source of truth. A harness UI not displaying the result is a delivery problem, not permission to generate another billed image. Return or inspect the recorded absolute path. If no completed Base64 result or saved artifact exists, fail honestly rather than creating a placeholder.
 
-- recover from the completed result record or returned Base64/path;
-- do not regenerate merely because display failed;
-- do not substitute SVG, screenshots, Python drawings, test images or placeholders;
-- fail honestly when the completed record contains no image data.
+## Required provenance
 
-## Codex-hosted compatibility
-
-If Codex built-in `image_gen` is used as an explicitly approved alternate surface, follow the same delivery invariant: mark before the call, recover the completed `image_generation_call` when UI delivery fails, validate the bitmap, and save it to the workspace without regenerating. This is a compatibility path, not an AIFlow model adapter.
-
-## Required result record
-
-```json
-{
-  "backend": "aiflow",
-  "canonical_model": "gpt-image-2",
-  "path": "/absolute/path/image.png",
-  "format": "png",
-  "bytes": 12345,
-  "sha256": "...",
-  "prompt": "...",
-  "source_result": "b64_json",
-  "retry_safe": null
-}
-```
+The sidecar uses `aiflow.image-result.v1` and records backend, canonical model, prompt, requested metadata, returned metadata, actual artifact metadata, request ID, safe usage and warnings. It never contains credentials or image Base64.

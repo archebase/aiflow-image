@@ -1,48 +1,40 @@
 # Unified image runtime architecture
 
-## Capability contract
+## Product boundary
 
-The skill owns one model-agnostic production contract:
+There is one installable image skill and one executable contract. `aiflow-basic` is not a runtime dependency. Claude Code, Codex, Pi, Hermes and other Python-capable harnesses invoke `scripts/aiflow_image.py`; AIFlow remains the only production gateway.
 
-- discover authorized image-generation capabilities;
-- generate a new raster image;
-- edit an existing raster image when supported;
-- accept labeled reference images when supported;
-- create multiple assets or variants as separate jobs;
-- preserve delivery artifacts and provenance;
-- report unsupported capability instead of silently degrading.
+## Layers
 
-## Current implementation
+1. **Skill orchestration** — brief, prompt method, bounded candidate rounds, review, iteration and release.
+2. **Harness-neutral CLI** — versioned JSON request/result contract and launcher-environment resolution.
+3. **AIFlow adapter** — `/llm/v1/models` capability discovery and `/llm/v1/images/generations` execution.
+4. **Artifact boundary** — Base64/container validation, full bitmap decode, no-overwrite sidecar-first commit and an image completion marker.
+5. **Deterministic production** — crop, inspection, future composition and release gates.
 
-AIFlow currently exposes one production image family:
+Model policy, identity, authorization, attribution, budget, route choice and provider credentials are not duplicated in the skill. They are server-owned AIFlow facts.
 
-| Capability | Current implementation |
-|---|---|
-| Provider family | OpenAI GPT Image through AIFlow |
-| Canonical model | `gpt-image-2` |
-| Protocol | `POST /llm/v1/images/generations` |
-| Generation | Supported |
-| Image edit | Not currently exposed by AIFlow |
-| Reference-image generation | Not currently exposed by AIFlow generations contract |
-| Native transparent output | Not supported by current `gpt-image-2` route |
-| Images per request | `n=1` |
-| Output | `b64_json` decoded to PNG/JPEG/WebP |
-| Streaming | Supported with partial images when enabled |
+## Current implemented capability
 
-Do not present Codex built-in generation as a second AIFlow provider. Codex's image workflow is absorbed as production methodology and delivery behavior; actual AIFlow execution currently remains GPT-only.
+- authenticated live model discovery;
+- generation through AIFlow Images;
+- one image per request;
+- PNG, JPEG and WebP artifact verification;
+- requested and actual metadata separation;
+- structured safe errors with no automatic retry;
+- cross-harness launcher discovery for AIFlow-configured environments.
 
-## Future provider slots
+The runtime does not currently implement Images edits, reference-image upload, streaming partial images or URL-result download. The skill must report those operations as unsupported rather than simulate them.
 
-Future models must implement the same capability record before use:
+## Future model/provider adaptation
 
-- canonical model ID;
-- provider family;
-- protocol and endpoint;
-- generate/edit/reference/stream/transparent capability booleans;
-- accepted sizes, ratios, formats and batch limits;
+A future AIFlow image model does not require a new user-facing skill. If it uses the existing Images request/result contract, live capability discovery is sufficient. If it introduces a different protocol, add an internal adapter behind the same `aiflow.image-request.v1` result and prove:
+
+- canonical model discovery;
+- supported input fields and limits;
 - output transport and artifact persistence;
-- retry/billing safety contract;
-- provenance fields;
-- negative controls proving unsupported operations fail closed.
+- retry/billing safety semantics;
+- positive generation evidence;
+- fail-closed negative controls for unsupported operations.
 
-Until an adapter exists and is verified, mark the provider `unsupported`; leave the implementation slot empty rather than guessing compatibility.
+Never infer compatibility solely from an OpenAI-like endpoint shape, and never expose provider account or physical route details as model truth.

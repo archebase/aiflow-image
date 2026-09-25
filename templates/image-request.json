@@ -1,0 +1,11 @@
+{
+  "schema": "aiflow.image-request.v1",
+  "prompt": "Describe the image, composition, style and exclusions.",
+  "output": "outputs/image.png",
+  "model": null,
+  "size": "1024x1024",
+  "quality": "medium",
+  "output_format": "png",
+  "background": "auto",
+  "moderation": "auto"
+}

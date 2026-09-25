@@ -10,8 +10,8 @@
 - References and rights:
 - Must include:
 - Must exclude:
-- Backend requirement: AIFlow | Codex built-in | user-approved alternate
-- Codex delivery recovery required: yes | no
+- AIFlow canonical model requirement, if any:
+- Output directory / naming plan:
 - Budget / retry boundary:
 - Approval owner:
 - Release deadline:
