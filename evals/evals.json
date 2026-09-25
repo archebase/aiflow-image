@@ -1,0 +1,28 @@
+{
+  "skill_name": "aiflow-image-production",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "为智域基石公众号做 3 套机器人触觉主题首图，输出横版和方图，保持主体一致，最后放官方 Logo 和标题。",
+      "expected_output": "The agent loads aiflow-basic and archebase-vi-guide, separates generation from deterministic Logo/text composition, records candidates and delivers variants with release QA.",
+      "files": [],
+      "expectations": [
+        "Does not ask the model to generate the official Logo or final text.",
+        "Uses a bounded candidate and iteration workflow.",
+        "Creates deterministic crop variants and records provenance.",
+        "Runs ArcheBase brand release gates."
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "用 AIFlow 做一组保持同一机器人角色和工业场景风格的四张活动海报底图，并说明每轮修改依据。",
+      "expected_output": "The agent creates a consistency dossier, uses controlled prompt iterations, compares candidates and records the selected master and hypotheses.",
+      "files": [],
+      "expectations": [
+        "Defines subject/style invariants before generation.",
+        "Changes named variables rather than vague make-it-better iterations.",
+        "Reports consistency limitations if reference-image support is unavailable."
+      ]
+    }
+  ]
+}
