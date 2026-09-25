@@ -1,71 +1,72 @@
 {
-  "skill_name": "aiflow-image",
+  "skill_name": "aiflow-image-gen",
+  "gateway_verified_at": "2026-09-26",
+  "gateway": "https://aiflow.archebase.ai/v1",
   "evals": [
     {
       "id": 1,
-      "prompt": "通过当前 harness 已配置好的 AIFlow 生成一张 1024x1024 PNG 产品概念图，保存到项目的 outputs/product.png。",
-      "expected_output": "The agent uses the unified AIFlow CLI, discovers a live image-capable canonical model, writes the verified bitmap and provenance sidecar, and reports safe artifact metadata.",
+      "prompt": "通过 AIFlow 生成一张 1024x1024 的 PNG 产品概念图，保存到 outputs/product.png。",
+      "expected_output": "The agent runs scripts/aiflow_image.py, lets the gateway pick an image-capable model, and returns the verified file plus provenance.",
       "files": [],
       "expectations": [
-        "Uses scripts/aiflow_image.py rather than requiring aiflow-basic or a provider API.",
-        "Uses live supports_image_generation capability and does not guess a newest model.",
-        "Produces one image plus a provenance sidecar without printing Base64 or credentials."
+        "Uses scripts/aiflow_image.py and the AIFlow token service, not a provider API.",
+        "Selects a model the gateway reports as image-generation capable.",
+        "Returns the image path, SHA-256 and provenance path without printing the credential or Base64."
       ]
     },
     {
       "id": 2,
-      "prompt": "为智域基石公众号做 3 套机器人触觉主题首图，输出横版和方图，保持主体一致，最后放官方 Logo 和标题。",
-      "expected_output": "The agent creates a bounded candidate round through separate AIFlow requests, separates generated pixels from official Logo/text composition, records every artifact, and runs VI release QA.",
+      "prompt": "生成一张 1024x1024 的图，但输出路径 outputs/product.jpg 已经存在。",
+      "expected_output": "The agent declines to overwrite by default and explains that overwrite=true is required or a new path should be chosen.",
       "files": [],
       "expectations": [
-        "Does not ask the model to generate the official Logo or final text.",
-        "Uses separate n=1 requests with unique output paths for the candidate set.",
-        "Creates deterministic crop variants and records provenance.",
-        "Loads archebase-vi-guide and runs brand release gates."
+        "Does not silently overwrite an existing artifact.",
+        "Reports artifact_exists before making any billed request.",
+        "Offers overwrite=true or a new versioned path as the fix."
       ]
     },
     {
       "id": 3,
-      "prompt": "用 AIFlow 做一组保持同一机器人角色和工业场景风格的四张活动海报底图，并说明每轮修改依据。",
-      "expected_output": "The agent creates a consistency dossier, states reference/edit limitations, uses controlled prompt iterations and records selected outputs and hypotheses.",
+      "prompt": "用 gpt-image-2.5 生成一张图。",
+      "expected_output": "The agent reports that the gateway lists gpt-image-2.5 but it reports no usable endpoint, and suggests gpt-image-2 instead.",
       "files": [],
       "expectations": [
-        "Defines subject and style invariants before generation.",
-        "Changes named variables rather than making vague repeat requests.",
-        "Does not claim reference-image consistency without an implemented adapter."
+        "Checks supported_endpoint_types rather than trusting the model name.",
+        "Reports model_unavailable with the available image models.",
+        "Does not silently substitute a different model without saying so."
       ]
     },
     {
       "id": 4,
-      "prompt": "Generate a campaign master through AIFlow and save the exact image into this project. If the UI does not display the result, do not generate it again.",
-      "expected_output": "The agent treats the saved bitmap and provenance sidecar as the source of truth and never regenerates merely because UI delivery failed.",
+      "prompt": "为智域基石公众号做 3 套机器人触觉主题首图，横版和方图，最后放官方 Logo 和标题。",
+      "expected_output": "The agent runs a bounded candidate round as separate n=1 requests, keeps generated pixels free of logo and typography, and derives crops deterministically.",
       "files": [],
       "expectations": [
-        "Uses the live-selected AIFlow canonical image model without silently switching providers.",
-        "Does not regenerate when a completed artifact exists but UI delivery failed.",
-        "Returns the exact verified workspace bitmap and provenance path."
+        "Does not ask the model to generate the official logo or final text.",
+        "Uses separate requests with distinct output paths for the candidates.",
+        "Derives variants with scripts/make_variants.py and loads archebase-vi-guide."
       ]
     },
     {
       "id": 5,
-      "prompt": "当前 AIFlow 给我显示了两个都支持图像生成的模型，但我没有指定用哪个。请直接选最新的那个生成。",
-      "expected_output": "The agent refuses to infer recency from model names and asks for an explicit model or AIFLOW_IMAGE_MODEL preference, returning safe canonical IDs.",
+      "prompt": "生成几张风格统一的机器人海报，并说明每轮修改依据。",
+      "expected_output": "The agent states subject/style invariants up front, changes one variable per iteration, and does not claim reference-image consistency the gateway cannot provide.",
       "files": [],
       "expectations": [
-        "Does not rank or select models by lexical version name.",
-        "Returns model_selection_required or requests an explicit preference.",
-        "Does not expose provider accounts or physical routes."
+        "Defines invariants before generating.",
+        "Changes one named variable per iteration.",
+        "Does not claim edit or reference-image support without evidence."
       ]
     },
     {
       "id": 6,
-      "prompt": "Add support for a future non-GPT text-to-image model without claiming features that have not been tested.",
-      "expected_output": "The agent keeps the adapter unsupported until executable positive evidence and fail-closed negative controls cover its capability contract.",
+      "prompt": "生成成功了，但我的编辑器里没显示图片。再生成一次吧。",
+      "expected_output": "The agent refuses to regenerate, points at the saved file and provenance, and treats the display gap as a presentation problem.",
       "files": [],
       "expectations": [
-        "Does not infer compatibility from an OpenAI-like API shape.",
-        "Records discovery, limits, output transport, provenance and retry/billing behavior.",
-        "Keeps the adapter unsupported until verified evidence exists."
+        "Does not issue a second billed request for an artifact that already exists.",
+        "Returns the existing image and provenance paths.",
+        "Explains that delivery is the file, not the UI."
       ]
     }
   ]

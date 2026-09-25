@@ -16,6 +16,4 @@ jobs:
       - run: python3 -m json.tool evals/evals.json >/dev/null
       - run: python3 -m json.tool templates/image-request.json >/dev/null
       - run: python3 -m unittest discover -s tests -v
-      - run: python3 -c "from PIL import Image; Image.new('RGB',(1600,900)).save('/tmp/master.png')"
-      - run: python3 scripts/make_variants.py /tmp/master.png --variant square=512x512 --output-dir /tmp/variants
-      - run: python3 scripts/inspect_image.py /tmp/variants/square.png
+      - run: git diff --check

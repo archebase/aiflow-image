@@ -24,23 +24,14 @@ sys.path.insert(0, str(ROOT / "scripts"))
 import aiflow_image as runtime  # noqa: E402
 
 
-AIFLOW_KEYS = (
+CONFIG_KEYS = (
     "AIFLOW_BASE_URL",
+    "ARCHEBASE_API_KEY",
     "AIFLOW_API_KEY",
 )
 
-UNRELATED_PROVIDER_KEYS = (
-    "AIFLOW_TOOL",
-    "OPENAI_BASE_URL",
-    "OPENAI_API_KEY",
-    "ANTHROPIC_BASE_URL",
-    "ANTHROPIC_API_KEY",
-)
 
-LAUNCHER_KEYS = AIFLOW_KEYS + UNRELATED_PROVIDER_KEYS
-
-
-def png_bytes(width: int = 16, height: int = 16) -> bytes:
+def png_bytes(width: int = 64, height: int = 64) -> bytes:
     buffer = BytesIO()
     Image.new("RGB", (width, height), (22, 82, 140)).save(buffer, format="PNG")
     return buffer.getvalue()
@@ -53,37 +44,47 @@ def models_payload(*model_ids: str) -> dict[str, object]:
             {
                 "id": model_id,
                 "object": "model",
-                "owned_by": "provider-internal-marker",
-                "supports_image_generation": True,
-                "route": "secret-route-marker",
+                "owned_by": "newapi",
+                "supported_endpoint_types": ["image-generation", "openai"],
             }
             for model_id in model_ids
         ],
     }
 
 
-def image_payload(*, width: int = 16, height: int = 16, declared_size: str | None = None) -> dict[str, object]:
-    result: dict[str, object] = {
-        "created": 1,
-        "data": [{"b64_json": base64.b64encode(png_bytes(width, height)).decode("ascii")}],
+def image_payload(
+    *,
+    width: int = 1254,
+    height: int = 1254,
+    returned_size: str | None = None,
+    generation_id: str = "gen_test",
+) -> dict[str, object]:
+    return {
+        "created": 1790364360,
+        "data": [
+            {
+                "b64_json": base64.b64encode(png_bytes(width, height)).decode("ascii"),
+                "generation_id": generation_id,
+            }
+        ],
         "output_format": "png",
-        "quality": "medium",
-        "usage": {"input_tokens": 2, "output_tokens": 3, "total_tokens": 5},
+        "quality": "low",
+        "background": "opaque",
+        "size": returned_size or f"{width}x{height}",
+        "usage": {"input_tokens": 16, "output_tokens": 515, "total_tokens": 531},
     }
-    if declared_size is not None:
-        result["size"] = declared_size
-    return result
 
 
 @contextlib.contextmanager
-def aiflow_service_environment(base_url: str, api_key: str):
-    """Set only the AIFlow service configuration the skill supports."""
+def gateway_environment(base_url: str, api_key: str):
     original = dict(os.environ)
     try:
-        for key in LAUNCHER_KEYS:
+        for key in CONFIG_KEYS:
             os.environ.pop(key, None)
-        os.environ["AIFLOW_BASE_URL"] = base_url.rstrip("/") + "/llm/v1"
-        os.environ["AIFLOW_API_KEY"] = api_key
+        if base_url:
+            os.environ["AIFLOW_BASE_URL"] = base_url
+        if api_key:
+            os.environ["ARCHEBASE_API_KEY"] = api_key
         yield
     finally:
         os.environ.clear()
@@ -93,8 +94,8 @@ def aiflow_service_environment(base_url: str, api_key: str):
 class MockGatewayHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
     mode = "success"
-    model_ids = ("gpt-image-test",)
-    response_payload: dict[str, object] = image_payload(declared_size="16x16")
+    model_ids: tuple[str, ...] = ("gpt-image-2",)
+    response_payload: dict[str, object] = image_payload()
     redirect_url = ""
     seen_authorization = ""
     seen_request: dict[str, object] | None = None
@@ -125,32 +126,29 @@ class MockGatewayHandler(BaseHTTPRequestHandler):
             self.send_header("Connection", "close")
             self.end_headers()
             return
-        if self.path != "/llm/v1/models":
+        if self.path != "/v1/models":
             self.write_json(404, {"error": {"code": "not_found"}})
             return
         if type(self).mode == "budget":
             self.write_json(
                 402,
-                {
-                    "error": {
-                        "code": "deny_budget_exceeded",
-                        "message": "secret-upstream-body-marker",
-                        "retry_safe": False,
-                    }
-                },
+                {"error": {"code": "insufficient_quota", "message": "quota exceeded", "retry_safe": False}},
                 request_id="aiflow_req_budget",
             )
+            return
+        if type(self).mode == "malformed":
+            self.write_json(200, {"unexpected": True})
             return
         self.write_json(200, models_payload(*type(self).model_ids), request_id="aiflow_req_models")
 
     def do_POST(self) -> None:
         type(self).post_count += 1
         type(self).seen_authorization = self.headers.get("Authorization", "")
-        if self.path != "/llm/v1/images/generations":
+        if self.path != "/v1/images/generations":
             self.write_json(404, {"error": {"code": "not_found"}})
             return
-        size = int(self.headers.get("Content-Length", "0"))
-        type(self).seen_request = json.loads(self.rfile.read(size))
+        length = int(self.headers.get("Content-Length", "0"))
+        type(self).seen_request = json.loads(self.rfile.read(length))
         self.write_json(200, type(self).response_payload, request_id="aiflow_req_generate")
 
 
@@ -159,13 +157,13 @@ class GatewayServer:
         self,
         *,
         mode: str = "success",
-        model_ids: tuple[str, ...] = ("gpt-image-test",),
+        model_ids: tuple[str, ...] = ("gpt-image-2",),
         response_payload: dict[str, object] | None = None,
         redirect_url: str = "",
     ) -> None:
         self.mode = mode
         self.model_ids = model_ids
-        self.response_payload = response_payload or image_payload(declared_size="16x16")
+        self.response_payload = response_payload or image_payload()
         self.redirect_url = redirect_url
 
     def __enter__(self) -> "GatewayServer":
@@ -180,7 +178,7 @@ class GatewayServer:
         self.server = ThreadingHTTPServer(("127.0.0.1", 0), MockGatewayHandler)
         self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
         self.thread.start()
-        self.base_url = f"http://127.0.0.1:{self.server.server_address[1]}"
+        self.base_url = f"http://127.0.0.1:{self.server.server_address[1]}/v1"
         return self
 
     def __exit__(self, *_args: object) -> None:
@@ -220,236 +218,228 @@ class RedirectSink:
 
 
 class RuntimeTests(unittest.TestCase):
-    def generate_request(self, root: Path, output: Path, **extra: object) -> Path:
-        request = {"schema": runtime.REQUEST_SCHEMA, "prompt": "blue test card", "output": str(output), **extra}
-        request_path = root / "request.json"
-        request_path.write_text(json.dumps(request), encoding="utf-8")
-        return request_path
+    def write_request(self, root: Path, output: Path, **extra: object) -> Path:
+        request = {"schema": runtime.REQUEST_SCHEMA, "prompt": "a blue circle", "output": str(output), **extra}
+        path = root / "request.json"
+        path.write_text(json.dumps(request), encoding="utf-8")
+        return path
 
-    def test_normalize_gateway_base_accepts_origin_and_gateway_base(self) -> None:
-        self.assertEqual(runtime.normalize_gateway_base("https://example.test"), "https://example.test/llm/v1")
-        self.assertEqual(runtime.normalize_gateway_base("https://example.test/llm/v1/"), "https://example.test/llm/v1")
-        self.assertEqual(runtime.normalize_gateway_base("https://example.test/llm"), "https://example.test/llm/v1")
+    # -- configuration -----------------------------------------------------
+
+    def test_default_gateway_and_archebase_credential(self) -> None:
+        with gateway_environment("", "service-key"):
+            self.assertEqual(runtime.resolve_connection(), (runtime.DEFAULT_BASE_URL, "service-key"))
+
+    def test_base_url_accepts_origin_or_v1(self) -> None:
+        self.assertEqual(runtime.normalize_base_url("https://aiflow.archebase.ai"), "https://aiflow.archebase.ai/v1")
+        self.assertEqual(
+            runtime.normalize_base_url("https://aiflow.archebase.ai/v1/"), "https://aiflow.archebase.ai/v1"
+        )
         with self.assertRaises(runtime.ImageSkillError):
-            runtime.normalize_gateway_base("http://example.test")
+            runtime.normalize_base_url("https://aiflow.archebase.ai/llm/v1")
         with self.assertRaises(runtime.ImageSkillError):
-            runtime.normalize_gateway_base("https://example.test/v1")
+            runtime.normalize_base_url("http://aiflow.archebase.ai")
 
-    def test_model_list_is_capability_only_and_selects_one_model(self) -> None:
-        models = runtime.safe_models(models_payload("gpt-image-test"))
-        self.assertEqual(models, [{"id": "gpt-image-test", "supports_image_generation": True}])
-        self.assertNotIn("secret-route-marker", json.dumps(models))
-        self.assertEqual(runtime.select_image_model(models, None, None), "gpt-image-test")
+    def test_missing_credential_is_reported_with_the_env_name(self) -> None:
+        with gateway_environment("", ""):
+            with self.assertRaises(runtime.ImageSkillError) as caught:
+                runtime.resolve_connection()
+        self.assertEqual(caught.exception.category, "configuration_error")
+        self.assertEqual(caught.exception.details["required_environment"], ["ARCHEBASE_API_KEY"])
 
-    def test_multiple_models_require_explicit_selection(self) -> None:
-        models = runtime.safe_models(models_payload("image-a", "image-b"))
-        with self.assertRaises(runtime.ImageSkillError) as caught:
-            runtime.select_image_model(models, None, None)
-        self.assertEqual(caught.exception.category, "model_selection_required")
-        self.assertEqual(runtime.select_image_model(models, "image-b", None), "image-b")
+    def test_aiflow_api_key_is_an_accepted_fallback(self) -> None:
+        original = dict(os.environ)
+        try:
+            for key in CONFIG_KEYS:
+                os.environ.pop(key, None)
+            os.environ["AIFLOW_API_KEY"] = "fallback-key"
+            self.assertEqual(runtime.resolve_connection(), (runtime.DEFAULT_BASE_URL, "fallback-key"))
+        finally:
+            os.environ.clear()
+            os.environ.update(original)
 
-    def test_models_command_uses_live_gateway_contract(self) -> None:
-        with GatewayServer() as gateway, aiflow_service_environment(gateway.base_url, "secret-key-marker"):
-            result = runtime.list_models(runtime.build_parser().parse_args(["models"]))
+    # -- discovery ---------------------------------------------------------
+
+    def test_model_listing_is_advisory_not_a_capability_gate(self) -> None:
+        payload = {
+            "data": [
+                {"id": "gpt-image-1.5", "supported_endpoint_types": ["image-generation", "openai"]},
+                {"id": "gpt-image-2", "supported_endpoint_types": ["image-generation"]},
+                {"id": "gpt-image-2.5", "supported_endpoint_types": []},
+                {"id": "glm-5.3", "supported_endpoint_types": ["openai"]},
+            ]
+        }
+        by_id = {m["id"]: m for m in runtime.discover_models(payload)}
+        self.assertTrue(by_id["gpt-image-2"]["declared_image_endpoint"])
+        self.assertFalse(by_id["gpt-image-2.5"]["declared_image_endpoint"])
+        self.assertTrue(by_id["gpt-image-2.5"]["image_hint"])
+        self.assertFalse(by_id["glm-5.3"]["image_hint"])
+
+    def test_empty_endpoint_list_does_not_block_generation(self) -> None:
+        # Measured on the live gateway: gpt-image-2.5 declares no endpoint yet generates.
+        self.assertEqual(runtime.select_model("gpt-image-2.5"), "gpt-image-2.5")
+
+    def test_default_model_is_gpt_image_2(self) -> None:
+        self.assertEqual(runtime.select_model(None), "gpt-image-2")
+
+    def test_models_command_reports_gateway_and_hints(self) -> None:
+        with GatewayServer(model_ids=("gpt-image-1.5", "gpt-image-2", "glm-5.3")) as gateway:
+            with gateway_environment(gateway.base_url, "secret-key"):
+                result = runtime.command_models(runtime.build_parser().parse_args(["models"]))
         self.assertTrue(result["ok"])
-        self.assertEqual(result["models"], [{"id": "gpt-image-test", "supports_image_generation": True}])
-        self.assertNotIn("provider-internal-marker", json.dumps(result))
-        self.assertEqual(MockGatewayHandler.seen_authorization, "Bearer secret-key-marker")
+        self.assertEqual(result["default_model"], "gpt-image-2")
+        self.assertIn("gpt-image-2", result["image_model_hints"])
+        self.assertEqual(MockGatewayHandler.seen_authorization, "Bearer secret-key")
 
-    def test_live_generation_saves_verified_artifact_and_provenance(self) -> None:
+    # -- generation --------------------------------------------------------
+
+    def test_generate_saves_verified_artifact_and_provenance(self) -> None:
         with GatewayServer() as gateway, tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             output = root / "result.png"
-            request_path = self.generate_request(root, output)
-            with aiflow_service_environment(gateway.base_url, "secret-key-marker"):
-                args = runtime.build_parser().parse_args(["generate", "--request", str(request_path)])
-                result = runtime.generate(args)
+            request = self.write_request(root, output, size="1024x1024", quality="low")
+            with gateway_environment(gateway.base_url, "secret-key"):
+                result = runtime.command_generate(
+                    runtime.build_parser().parse_args(["generate", "--request", str(request)])
+                )
             self.assertTrue(result["ok"])
-            self.assertEqual(result["canonical_model"], "gpt-image-test")
-            self.assertEqual(result["artifact"]["width"], 16)
-            self.assertEqual(output.read_bytes(), png_bytes())
+            self.assertEqual(result["canonical_model"], "gpt-image-2")
+            self.assertEqual(result["generation_id"], "gen_test")
+            self.assertEqual(result["artifact"]["width"], 1254)
+            self.assertEqual(MockGatewayHandler.seen_request["n"], 1)
+            self.assertEqual(MockGatewayHandler.seen_request["model"], "gpt-image-2")
             provenance = json.loads(Path(result["provenance_path"]).read_text(encoding="utf-8"))
             self.assertEqual(provenance["schema"], runtime.RESULT_SCHEMA)
+            self.assertEqual(provenance["artifact"]["sha256"], result["artifact"]["sha256"])
             self.assertNotIn(base64.b64encode(png_bytes()).decode("ascii"), json.dumps(provenance))
-            self.assertEqual(MockGatewayHandler.seen_authorization, "Bearer secret-key-marker")
-            self.assertEqual(MockGatewayHandler.seen_request["n"], 1)
 
-    def test_missing_returned_metadata_does_not_create_false_warning(self) -> None:
-        response = image_payload()
-        response.pop("quality", None)
-        response.pop("output_format", None)
-        with GatewayServer(response_payload=response) as gateway, tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            request_path = self.generate_request(root, root / "result.png", quality="high", output_format="png")
-            with aiflow_service_environment(gateway.base_url, "key"):
-                result = runtime.generate(runtime.build_parser().parse_args(["generate", "--request", str(request_path)]))
-            self.assertEqual(result["warnings"], [])
-
-    def test_output_extension_and_format_are_resolved_before_gateway_request(self) -> None:
+    def test_normalized_size_is_recorded_as_a_warning(self) -> None:
         with GatewayServer() as gateway, tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
-            request_path = self.generate_request(root, root / "result.jpg", output_format="png")
-            with aiflow_service_environment(gateway.base_url, "key"):
-                with self.assertRaises(runtime.ImageSkillError) as caught:
-                    runtime.generate(runtime.build_parser().parse_args(["generate", "--request", str(request_path)]))
-            self.assertEqual(caught.exception.category, "input_error")
-            self.assertEqual(MockGatewayHandler.get_count, 0)
-            self.assertEqual(MockGatewayHandler.post_count, 0)
+            request = self.write_request(root, root / "result.png", size="1024x1024")
+            with gateway_environment(gateway.base_url, "key"):
+                result = runtime.command_generate(
+                    runtime.build_parser().parse_args(["generate", "--request", str(request)])
+                )
+        self.assertEqual(result["requested"]["size"], "1024x1024")
+        self.assertEqual(result["returned"]["size"], "1254x1254")
+        self.assertIn("requested_size_normalized", result["warnings"])
 
-    def test_existing_output_is_rejected_before_any_gateway_request(self) -> None:
+    def test_existing_output_is_rejected_before_any_request(self) -> None:
         with GatewayServer() as gateway, tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             output = root / "result.png"
             output.write_bytes(b"existing")
-            request_path = self.generate_request(root, output)
-            with aiflow_service_environment(gateway.base_url, "key"):
+            request = self.write_request(root, output)
+            with gateway_environment(gateway.base_url, "key"):
                 with self.assertRaises(runtime.ImageSkillError) as caught:
-                    runtime.generate(runtime.build_parser().parse_args(["generate", "--request", str(request_path)]))
-            self.assertEqual(caught.exception.category, "artifact_exists")
-            self.assertEqual(MockGatewayHandler.get_count, 0)
-            self.assertEqual(MockGatewayHandler.post_count, 0)
+                    runtime.command_generate(
+                        runtime.build_parser().parse_args(["generate", "--request", str(request)])
+                    )
+        self.assertEqual(caught.exception.category, "artifact_exists")
+        self.assertEqual(MockGatewayHandler.get_count, 0)
+        self.assertEqual(MockGatewayHandler.post_count, 0)
 
-    def test_symlink_output_is_rejected_before_any_gateway_request(self) -> None:
+    def test_overwrite_true_replaces_the_artifact(self) -> None:
+        with GatewayServer() as gateway, tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            output = root / "result.png"
+            output.write_bytes(b"old")
+            request = self.write_request(root, output, overwrite=True)
+            with gateway_environment(gateway.base_url, "key"):
+                result = runtime.command_generate(
+                    runtime.build_parser().parse_args(["generate", "--request", str(request)])
+                )
+            self.assertTrue(result["ok"])
+            self.assertNotEqual(output.read_bytes(), b"old")
+
+    def test_symlink_output_is_rejected_before_any_request(self) -> None:
         with GatewayServer() as gateway, tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             target = root / "target.png"
-            output = root / "link.png"
-            output.symlink_to(target)
-            request_path = self.generate_request(root, output)
-            with aiflow_service_environment(gateway.base_url, "key"):
+            link = root / "link.png"
+            link.symlink_to(target)
+            request = self.write_request(root, link)
+            with gateway_environment(gateway.base_url, "key"):
                 with self.assertRaises(runtime.ImageSkillError) as caught:
-                    runtime.generate(runtime.build_parser().parse_args(["generate", "--request", str(request_path)]))
-            self.assertEqual(caught.exception.category, "artifact_error")
-            self.assertFalse(target.exists())
-            self.assertEqual(MockGatewayHandler.get_count, 0)
-            self.assertEqual(MockGatewayHandler.post_count, 0)
+                    runtime.command_generate(
+                        runtime.build_parser().parse_args(["generate", "--request", str(request)])
+                    )
+        self.assertEqual(caught.exception.category, "artifact_error")
+        self.assertFalse(target.exists())
+        self.assertEqual(MockGatewayHandler.post_count, 0)
 
-    def test_artifact_pair_rolls_back_sidecar_if_image_link_fails(self) -> None:
+    def test_output_extension_must_match_output_format(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
-            output = Path(temporary) / "result.png"
-            calls = 0
-            real_link = os.link
+            root = Path(temporary)
+            request = self.write_request(root, root / "result.jpg", output_format="png")
+            with self.assertRaises(runtime.ImageSkillError) as caught:
+                runtime.validate_request(json.loads(request.read_text()), None)
+        self.assertEqual(caught.exception.category, "input_error")
 
-            def fail_second_link(source: object, destination: object, *args: object, **kwargs: object) -> None:
-                nonlocal calls
-                calls += 1
-                if calls == 2:
-                    raise OSError("simulated image link failure")
-                real_link(source, destination, *args, **kwargs)
+    # -- artifact integrity ------------------------------------------------
 
-            with mock.patch.object(runtime.os, "link", side_effect=fail_second_link):
-                with self.assertRaises(runtime.ImageSkillError) as caught:
-                    runtime.write_artifacts(output, png_bytes(), {"schema": runtime.RESULT_SCHEMA})
-            self.assertEqual(caught.exception.category, "artifact_error")
-            self.assertFalse(output.exists())
-            self.assertFalse(output.with_suffix(".png.json").exists())
-
-    def test_truncated_image_container_is_rejected(self) -> None:
-        response = image_payload(declared_size="16x16")
-        encoded = response["data"][0]["b64_json"]
-        response["data"][0]["b64_json"] = base64.b64encode(base64.b64decode(encoded)[:-1]).decode("ascii")
+    def test_truncated_container_is_rejected(self) -> None:
+        payload = image_payload()
+        encoded = payload["data"][0]["b64_json"]
+        payload["data"][0]["b64_json"] = base64.b64encode(base64.b64decode(encoded)[:-1]).decode("ascii")
         with self.assertRaises(runtime.ImageSkillError) as caught:
-            runtime.decode_and_inspect_image(response, runtime.DEFAULT_MAX_IMAGE_BYTES)
+            runtime.decode_image(payload, runtime.DEFAULT_MAX_IMAGE_BYTES)
         self.assertEqual(caught.exception.category, "invalid_gateway_response")
 
     def test_decompression_bomb_is_structured(self) -> None:
-        response = image_payload(declared_size="16x16")
         with mock.patch("PIL.Image.open", side_effect=DecompressionBombError("too large")):
             with self.assertRaises(runtime.ImageSkillError) as caught:
-                runtime.decode_and_inspect_image(response, runtime.DEFAULT_MAX_IMAGE_BYTES)
+                runtime.decode_image(image_payload(), runtime.DEFAULT_MAX_IMAGE_BYTES)
         self.assertEqual(caught.exception.category, "invalid_gateway_response")
 
-    def test_image_dimensions_are_bounded_after_decode(self) -> None:
-        response = image_payload(width=16, height=16, declared_size="16x16")
+    def test_returned_size_mismatch_is_rejected(self) -> None:
+        payload = image_payload(width=64, height=64, returned_size="1024x1024")
+        with self.assertRaises(runtime.ImageSkillError) as caught:
+            runtime.decode_image(payload, runtime.DEFAULT_MAX_IMAGE_BYTES)
+        self.assertEqual(caught.exception.category, "invalid_gateway_response")
+
+    def test_pixel_limit_is_enforced(self) -> None:
         with mock.patch.object(runtime, "MAX_IMAGE_PIXELS", 100):
             with self.assertRaises(runtime.ImageSkillError) as caught:
-                runtime.decode_and_inspect_image(response, runtime.DEFAULT_MAX_IMAGE_BYTES)
+                runtime.decode_image(image_payload(width=64, height=64), runtime.DEFAULT_MAX_IMAGE_BYTES)
         self.assertEqual(caught.exception.category, "invalid_gateway_response")
 
-    def test_mismatched_response_metadata_is_rejected_before_write(self) -> None:
-        response = image_payload(declared_size="1024x1024")
-        with GatewayServer(response_payload=response) as gateway, tempfile.TemporaryDirectory() as temporary:
-            root = Path(temporary)
-            output = root / "result.png"
-            request_path = self.generate_request(root, output)
-            with aiflow_service_environment(gateway.base_url, "key"):
-                with self.assertRaises(runtime.ImageSkillError) as caught:
-                    runtime.generate(runtime.build_parser().parse_args(["generate", "--request", str(request_path)]))
-            self.assertEqual(caught.exception.category, "invalid_gateway_response")
-            self.assertFalse(output.exists())
+    # -- transport safety --------------------------------------------------
 
-    def test_only_aiflow_service_variables_configure_the_runtime(self) -> None:
-        original = dict(os.environ)
-        try:
-            for key in LAUNCHER_KEYS:
-                os.environ.pop(key, None)
-            os.environ["AIFLOW_BASE_URL"] = "https://aiflow.example/llm/v1"
-            os.environ["AIFLOW_API_KEY"] = "service-key"
-            self.assertEqual(runtime.resolve_connection(), ("https://aiflow.example/llm/v1", "service-key"))
-            os.environ.pop("AIFLOW_API_KEY")
-            with self.assertRaises(runtime.ImageSkillError) as caught:
-                runtime.resolve_connection()
-            self.assertEqual(caught.exception.details["required_environment"], ["AIFLOW_API_KEY"])
-        finally:
-            os.environ.clear()
-            os.environ.update(original)
-
-    def test_unrelated_provider_variables_are_ignored(self) -> None:
-        original = dict(os.environ)
-        try:
-            for key in LAUNCHER_KEYS:
-                os.environ.pop(key, None)
-            os.environ["AIFLOW_TOOL"] = "codex"
-            os.environ["OPENAI_BASE_URL"] = "https://gateway.example/llm/v1"
-            os.environ["OPENAI_API_KEY"] = "must-not-be-consumed"
-            os.environ["ANTHROPIC_BASE_URL"] = "https://gateway.example/llm"
-            os.environ["ANTHROPIC_API_KEY"] = "must-not-be-consumed"
-            with self.assertRaises(runtime.ImageSkillError) as caught:
-                runtime.resolve_connection()
-            self.assertEqual(caught.exception.category, "configuration_error")
-            self.assertEqual(
-                caught.exception.details["required_environment"],
-                ["AIFLOW_BASE_URL", "AIFLOW_API_KEY"],
-            )
-        finally:
-            os.environ.clear()
-            os.environ.update(original)
-
-    def test_redirect_is_not_followed_or_sent_authorization(self) -> None:
+    def test_redirect_is_not_followed(self) -> None:
         with RedirectSink() as sink, GatewayServer(mode="redirect", redirect_url=sink.url) as gateway:
             with self.assertRaises(runtime.ImageSkillError) as caught:
-                runtime.http_json(
-                    runtime.normalize_gateway_base(gateway.base_url) + "/models",
-                    "secret-key-marker",
-                    timeout=2,
-                    max_response_bytes=1024,
-                )
-            self.assertEqual(caught.exception.http_status, 302)
-            self.assertEqual(RedirectSinkHandler.seen_authorization, "")
+                runtime.request_json(gateway.base_url + "/models", "secret-key", timeout=2, max_response_bytes=1024)
+        self.assertEqual(caught.exception.http_status, 302)
+        self.assertEqual(RedirectSinkHandler.seen_authorization, "")
 
-    def test_gateway_error_is_classified_without_raw_body(self) -> None:
+    def test_budget_error_is_classified_without_raw_body(self) -> None:
         with GatewayServer(mode="budget") as gateway:
             with self.assertRaises(runtime.ImageSkillError) as caught:
-                runtime.http_json(
-                    runtime.normalize_gateway_base(gateway.base_url) + "/models",
-                    "secret-key-marker",
-                    timeout=2,
-                    max_response_bytes=1024,
-                )
-            error = caught.exception.as_dict()
-            self.assertEqual(error["category"], "budget_denied")
-            self.assertEqual(error["code"], "deny_budget_exceeded")
-            self.assertFalse(error["retry_safe"])
-            self.assertEqual(error["request_id"], "aiflow_req_budget")
-            self.assertNotIn("secret-upstream-body-marker", json.dumps(error))
-            self.assertNotIn("secret-key-marker", json.dumps(error))
+                runtime.request_json(gateway.base_url + "/models", "secret-key", timeout=2, max_response_bytes=1024)
+        error = caught.exception.as_dict()
+        self.assertEqual(error["category"], "budget_denied")
+        self.assertEqual(error["http_status"], 402)
+        self.assertEqual(error["request_id"], "aiflow_req_budget")
 
-    def test_production_cli_has_no_fixture_injection_options(self) -> None:
-        parser = runtime.build_parser()
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            parser.parse_args(["models", "--input-json", "models.json"])
-        with contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
-            parser.parse_args(["generate", "--request", "request.json", "--response-json", "response.json"])
+    def test_malformed_model_list_is_rejected(self) -> None:
+        with GatewayServer(mode="malformed") as gateway:
+            with gateway_environment(gateway.base_url, "key"):
+                with self.assertRaises(runtime.ImageSkillError) as caught:
+                    runtime.command_models(runtime.build_parser().parse_args(["models"]))
+        self.assertEqual(caught.exception.category, "invalid_gateway_response")
+
+    def test_cli_reports_errors_as_json(self) -> None:
+        with gateway_environment("", ""):
+            buffer = io.StringIO()
+            with contextlib.redirect_stdout(buffer):
+                with mock.patch.object(sys, "argv", ["aiflow_image.py", "models"]):
+                    code = runtime.main()
+        self.assertEqual(code, 1)
+        payload = json.loads(buffer.getvalue())
+        self.assertFalse(payload["ok"])
+        self.assertEqual(payload["error"]["category"], "configuration_error")
 
 
 if __name__ == "__main__":

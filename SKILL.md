@@ -1,61 +1,60 @@
 ---
-name: aiflow-image
-description: Generate and produce raster images through the configured AIFlow gateway. Use for every AIFlow image request, including one-shot generation, candidate sets, controlled iteration, consistent visual families, campaign masters, deterministic crops, artifact recovery, brand-sensitive graphics and release QA. This skill is self-contained and works in any Python-capable harness that has the AIFlow service configured; do not call a model provider directly.
+name: aiflow-image-gen
+description: Generate and produce raster images through the AIFlow token service (New API gateway). Use for any AIFlow image request — one-shot generation, candidate sets, controlled iteration, consistent visual families, campaign masters, deterministic crops, artifact recovery and brand-sensitive graphics — and whenever an image must be written to disk with verifiable provenance. Works in any Python-capable harness whose environment carries AIFLOW_BASE_URL and ARCHEBASE_API_KEY; never call a model provider directly.
 license: Proprietary. For ArcheBase organization use only.
 metadata:
-  version: "2.1.0"
+  version: "3.0.0"
   runtime_contract: "aiflow.image-request.v1"
-compatibility: "Requires Python 3.10+, Pillow 12.0.0, and AIFLOW_BASE_URL/AIFLOW_API_KEY from the configured AIFlow service. ArcheBase-branded work also requires archebase-vi-guide."
+compatibility: "Requires Python 3.10+, Pillow 12.0.0, AIFLOW_BASE_URL and ARCHEBASE_API_KEY. ArcheBase-branded work also requires archebase-vi-guide."
 ---
 
-# AIFlow Image
+# AIFlow Image Generation
 
-Use one self-contained AIFlow workflow for both simple generation and production work. Model discovery, authorization, routing, budget and canonical model facts remain owned by AIFlow; this skill compiles the request, invokes the gateway, verifies the artifact and manages review and delivery.
+Generate images through the AIFlow token service and deliver verified files. The gateway owns models, authorization, routing, budget and billing; this skill compiles the request, calls the gateway, verifies the artifact and manages review and delivery.
 
 ## Required execution path
 
-1. Read `references/runtime-contract.md` before the first gateway call in a session.
-2. Read `references/generation-methodology.md` and `references/prompt-compiler.md` before compiling the first prompt.
+1. Read `references/runtime-contract.md` before the first call in a session — it records the verified gateway contract.
+2. For production work, read `references/prompt-compiler.md` and `references/generation-methodology.md` before compiling prompts.
 3. Read `references/artifact-delivery.md` before choosing an output path.
-4. When adding a future image protocol or model adapter, first read `references/runtime-architecture.md`, `references/verified-adapters.md` and `templates/model-adapter.md`; keep unproven capabilities unsupported.
-5. Write a request using `templates/image-request.json`, then run:
+4. Write a request from `templates/image-request.json`, then run:
 
    ```bash
+   python3 scripts/aiflow_image.py models
    python3 scripts/aiflow_image.py generate --request request.json
    ```
 
-6. Treat the command's JSON result and saved provenance sidecar as the execution record. Never reconstruct success from chat text or a missing UI attachment.
-7. Read `references/iteration-and-review.md` before selecting or revising candidates. For repeated subjects or a visual family, also read `references/consistency.md`.
-8. For ArcheBase-branded output, load `archebase-vi-guide` and read `references/brand-production.md` before composition or release.
+5. Treat the command's JSON result and the provenance sidecar as the record. Do not reconstruct success from chat text.
+6. Read `references/iteration-and-review.md` before selecting or revising candidates; read `references/consistency.md` when a subject must stay stable across images.
+7. For ArcheBase-branded output, load `archebase-vi-guide` and read `references/brand-production.md`.
 
 ## Workflow
 
-1. Resolve the deliverable, audience, placement, dimensions, factual boundary, rights and success criteria. Use `templates/brief.md` for production work; do not force a full brief for a straightforward one-image request.
-2. Compile a concrete prompt. Keep official marks, final typography and exact data overlays out of generated pixels.
-3. Generate one distinct asset per command. A candidate set is a bounded series of separate requests, normally 2–4, with unique output paths.
-4. Let the runtime discover live image-capable canonical models. Specify `model` only when the user or production plan requires one; never infer a newest model from its name.
-5. Inspect every saved artifact for brief fit, geometry, accidental text or marks, factual implications, rights and crop resilience.
-6. Iterate with one stated hypothesis at a time and restate accepted invariants.
-7. Create deterministic crops with `scripts/make_variants.py` and inspect deliverables with `scripts/inspect_image.py`. Add official assets and final text only in deterministic post-production.
-8. Run the pre-delivery gate: verify the artifact and sidecar exist, hashes and dimensions match, requested variants open correctly, provenance and rights are recorded, brand/channel gates passed, and a human selected the release candidate.
+1. Resolve deliverable, audience, placement, dimensions and rights. Skip the full brief for a simple one-image request; use `templates/brief.md` for production work.
+2. Compile a concrete prompt. Keep official logos, final typography and exact figures out of generated pixels.
+3. Generate one asset per command. A candidate set is a bounded series of separate requests with unique output paths.
+4. Treat `/v1/models` as advisory. Its `supported_endpoint_types` field does not prove a route works: `gpt-image-2.5` declares an empty list yet generates successfully on the live gateway. The generation call is the only authoritative test.
+5. Inspect every saved artifact against the brief.
+6. Iterate with one stated hypothesis at a time.
+7. Derive crops with `scripts/make_variants.py`, inspect files with `scripts/inspect_image.py`, and add official assets and typography afterwards.
+8. Before delivery confirm: image and sidecar exist, hashes and dimensions match, variants open, provenance is recorded, and a human accepted the release candidate.
 
 ## Runtime rules
 
-- Use only the configured AIFlow gateway. Do not call OpenAI or another provider directly and do not use a harness-native image generator as a silent fallback.
-- The runtime reads only `AIFLOW_BASE_URL` and `AIFLOW_API_KEY`; it never consumes `OPENAI_*` or `ANTHROPIC_*` as AIFlow credentials. It refuses provider `/v1` paths and never follows redirects; the operator owns the trusted AIFlow hostname.
-- The live `/llm/v1/models` response is the model source of truth. If several image-capable models are visible, select one explicitly or configure `AIFLOW_IMAGE_MODEL`.
-- Never put credentials in command arguments, files, prompts, logs or chat.
-- Never retry automatically. Retry only after the returned structured error explicitly reports `retry_safe: true` and the user or workflow approves the additional cost.
-- A completed artifact is not regenerated merely because a harness UI failed to display it.
+- Configuration is `AIFLOW_BASE_URL` (which defaults to `https://aiflow.archebase.ai/v1`) and `ARCHEBASE_API_KEY`. Never put the credential in prompts, files, command arguments or chat output.
+- Model availability is decided by the generation call, not by `supported_endpoint_types`. Default model is `gpt-image-2`; set `model` in the request to use another.
+- The gateway may normalize `size` and `quality`. Returned values are authoritative; a difference from the request is a warning, not a failure.
+- Never retry automatically. Retry only when the structured error reports `retry_safe: true` and a human accepts the extra cost.
+- A completed artifact is not regenerated because a harness UI failed to display it.
+- Do not claim edit, reference-image, streaming or transparency support unless a real gateway request proves it.
 
 ## Hard boundaries
 
-- Never generate or approximate an official Logo; composite approved assets after generation.
-- Never rely on generated text for final copy, labels, metrics or precise diagrams.
-- Never depict a specific customer deployment, capability or real person without evidence and rights.
+- Never generate or approximate an official logo; composite approved assets after generation.
+- Never rely on generated text for final copy, labels, metrics or diagrams.
+- Never depict a specific customer site, capability or real person without evidence and rights.
 - Never publish without provenance, rights status, visual review and human acceptance.
-- Do not claim edit, reference-image, transparency, streaming or consistency capability unless the live AIFlow request actually supports and proves it.
 
 ## Output contract
 
-Return the selected image path, provenance sidecar path, canonical model, actual format and dimensions, SHA-256, warnings and unresolved blockers. For production work, also return the requested variants and a release verdict: `ready`, `revise` or `blocked`.
+Return the image path, provenance path, canonical model, actual format and dimensions, SHA-256, warnings and unresolved blockers. For production work also return the requested variants and a verdict: `ready`, `revise` or `blocked`.
